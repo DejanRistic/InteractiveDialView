@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- InteractiveDialView Colors -->
+    <color name="oraange_fill">#FFB800</color>
+    <color name="dark_orange">#FFCA3F</color>
+    <color name="light_orange">#FFDA7F</color>
+    <color name="custom_gray">#939598</color>
+
+</resources>
