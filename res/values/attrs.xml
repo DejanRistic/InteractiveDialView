@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <declare-styleable name="DraggableDot">
+        <attr name="radius" format="dimension" />
+        <attr name="legend" format="string" />
+        <attr name="anr">
+            <enum name="none" value="0" />
+            <enum name="thumbnail" value="1" />
+            <enum name="drop" value="2" />
+        </attr>
+    </declare-styleable>
+
+</resources>

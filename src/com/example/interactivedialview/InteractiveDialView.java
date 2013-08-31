@@ -9,27 +9,28 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.DragEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.LinearLayout;
 
 public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 	// Static button attributes
-	private static final int BUTTON_WIDTH = 100;
-	private static final int BUTTON_HEIGHT = 100;
-	private static final int BUTTON_OFFSET = 10;
+	private static final int BUTTON_WIDTH = 120;
+	private static final int BUTTON_HEIGHT = 120;
+	private static final int BUTTON_OFFSET = 12;
 
 	private static final int DIAL_OFFSET = 50;
 
 	private static final float DEFAULT_START_ANGLE = 90.0f;
 	private static final float DEFAULT_START_SWEEP_ANGLE = 90.0f;
 
-	private Button mButton;
+	private Button mDialControl;
 
+	private LinearLayout testView;
 	private DialView mDial;
 	private Rect mDialLayout;
 
@@ -55,21 +56,30 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 		init();
 	}
 
+	/**
+	 * Any layout manager that doesn't scroll will want this.
+	 */
+	@Override
+	public boolean shouldDelayChildPressedState() {
+		return false;
+	}
+
 	public void setStartAngle(float startAngle) {
 		mStartAngle = startAngle;
 	}
 
 	private void init() {
 		mDial = new DialView(getContext());
-
-		mButton = new Button(getContext());
+		testView = new LinearLayout(getContext());
+		mDialControl = new Button(getContext());
 
 		mDialLayout = new Rect();
 
-		mButton.setOnTouchListener(this);
+		mDialControl.setOnTouchListener(this);
 
 		addView(mDial);
-		addView(mButton);
+		addView(mDialControl);
+		addView(testView);
 	}
 
 	private void initDialView() {
@@ -83,27 +93,32 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 	}
 
-	private void initButtonControl() {
-		mButton.setTextColor(Color.WHITE);
-		mButton.setTextSize(10);
-		mButton.setBackgroundResource(R.drawable.dial_button_shape);
-		// mButton.setBackgroundColor(Color.BLACK);
-		mButton.setHeight(BUTTON_HEIGHT);
-		mButton.setWidth(BUTTON_WIDTH);
+	private void initDialControl() {
+		mDialControl.setTextColor(Color.WHITE);
+		mDialControl.setTextSize(10);
+		mDialControl.setBackgroundResource(R.drawable.dial_button_shape);
+		mDialControl.setHeight(BUTTON_HEIGHT);
+		mDialControl.setWidth(BUTTON_WIDTH);
 
+		// Get the radius and center position of our DialView.
 		float radius = mDial.getDialRadius();
 		float centerX = mDial.getDialCenterX();
 		float centerY = mDial.getDialCenterY();
 
+		// Ensure that the position of the dial control button reflects the
+		// defined start angle.
 		double angleInRadians = Math.toRadians(mStartAngle);
+		double x = centerX + radius * Math.cos(angleInRadians);
+		double y = centerY + radius * Math.sin(angleInRadians);
 
-		double left = centerX + radius * Math.cos(angleInRadians);
-		double top = centerY + radius * Math.sin(angleInRadians);
+		positionDialControl((int) x, (int) y);
+	}
 
-		mButton.setLeft((int) left);
-		mButton.setTop((int) top);
-		mButton.setRight((int) left + BUTTON_WIDTH);
-		mButton.setBottom((int) top + BUTTON_HEIGHT);
+	private void positionDialControl(int x, int y) {
+		mDialControl.setLeft(x);
+		mDialControl.setTop(y);
+		mDialControl.setRight(x + BUTTON_WIDTH);
+		mDialControl.setBottom(y + BUTTON_HEIGHT);
 	}
 
 	@Override
@@ -118,25 +133,44 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 		double x = 0;
 		double y = 0;
 
-		switch (event.getActionMasked()) {
+		switch (event.getAction()) {
 		case MotionEvent.ACTION_DOWN:
 			break;
 		case MotionEvent.ACTION_MOVE:
-			angle = Math.atan2(event.getRawY() - centerY, event.getRawX()
-					- centerX);
 
+			// Make sure that the rawX and rawY we get is relative to our view
+			// and not to the entire screen size. The button width and height is
+			// used to make sure the moving button stays in the center of the
+			// touching object (finger), otherwise the buttons top left corner
+			// would be where the touch is. This would cause a jumping effect
+			// (button instantly jumps into a slightly offset position) when a
+			// move event is first detected.
+			int[] location = new int[2];
+			getLocationOnScreen(location);
+			x = (event.getRawX() - location[0]) - BUTTON_WIDTH / 2;
+			y = (event.getRawY() - location[1]) - BUTTON_HEIGHT / 2;
+
+			// Get the angle so we know where to position the button that
+			// controls the dial.
+			angle = Math.atan2(y - centerY, x - centerX);
+
+			// Get the points based on our angle that will be used to directly
+			// position the button on the circles edge.
 			x = centerX + dialRadius * Math.cos(angle);
 			y = centerY + dialRadius * Math.sin(angle);
 
+			// Ensure that our sweep angle is always in a 360 degree range. For
+			// example if the default start angle is 90 degrees, this means that
+			// the sweep angle will always be between 90 and 450.
 			mSweepAngle = (float) Math.toDegrees(angle);
 			mSweepAngle = mSweepAngle < 0 ? mSweepAngle + 360 : mSweepAngle;
 			mSweepAngle = mSweepAngle < mStartAngle ? mSweepAngle + 360
 					: mSweepAngle;
 
-			v.setX((float) x);
-			v.setY((float) y);
+			mDialControl.setText(String.valueOf(mSweepAngle));
 
-			mButton.setText(String.valueOf(mSweepAngle));
+			// Position our dial control button
+			positionDialControl((int) x, (int) y);
 
 			break;
 		}
@@ -144,30 +178,21 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
-		super.onDraw(canvas);
-		canvas.drawPoint(mButton.getX(), mButton.getY(), new Paint(Color.BLACK));
-		invalidate();
-
-	}
-
-	@Override
-	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-		super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-		Log.v("onMeasure", "onMeasure");
-	}
-
-	@Override
 	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
 		super.onSizeChanged(w, h, oldw, oldh);
 		Log.v("parent size changed", "parent size changed");
 		initDialView();
-		initButtonControl();
-	}
+		initDialControl();
+		testView.setBackgroundResource(R.drawable.inner_view_circle_mask);
+		testView.layout(mDialLayout.left + DIAL_OFFSET + 100, mDialLayout.top
+				+ DIAL_OFFSET + 235, mDialLayout.right - DIAL_OFFSET - 100,
+				mDialLayout.bottom - DIAL_OFFSET - 235);
 
-	@Override
-	protected void onLayout(boolean changed, int left, int top, int right,
-			int bottom) {
+		Log.v("LEFT:", String.valueOf(testView.getLeft()));
+		Log.v("TOP:", String.valueOf(testView.getTop()));
+		Log.v("RIGHT:", String.valueOf(testView.getRight()));
+		Log.v("BOTTOM:", String.valueOf(testView.getBottom()));
+
 	}
 
 	class DialView extends View {
@@ -306,7 +331,7 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 		@Override
 		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 			super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-			Log.v("dialView on measure", "dialView on measure");
+
 		}
 
 		@Override
@@ -320,5 +345,11 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 			invalidate();
 		}
+	}
+
+	@Override
+	protected void onLayout(boolean changed, int l, int t, int r, int b) {
+		// TODO Auto-generated method stub
+
 	}
 }
