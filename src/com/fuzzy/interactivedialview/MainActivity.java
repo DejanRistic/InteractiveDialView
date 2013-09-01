@@ -1,4 +1,5 @@
-package com.example.interactivedialview;
+package com.fuzzy.interactivedialview;
+
 
 import android.app.Activity;
 import android.os.Bundle;

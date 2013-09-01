@@ -1,20 +1,24 @@
-package com.example.interactivedialview;
+package com.fuzzy.interactivedialview;
 
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Paint.Align;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
@@ -25,8 +29,11 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 	private static final int DIAL_OFFSET = 50;
 
+	private static final int FULL_CIRCLE_ANGLE = 360;
+
 	private static final float DEFAULT_START_ANGLE = 90.0f;
 	private static final float DEFAULT_START_SWEEP_ANGLE = 90.0f;
+	private static final float DEFAULT_START_RANGE = 100;
 
 	private Button mDialControl;
 
@@ -39,6 +46,9 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 	private float mSweepAngle = DEFAULT_START_SWEEP_ANGLE;
 	private float mStartAngle = DEFAULT_START_ANGLE;
+	private float mDialRange = DEFAULT_START_RANGE;
+
+	private float mRangeFactor = mDialRange / FULL_CIRCLE_ANGLE;
 
 	public InteractiveDialView(Context context) {
 		super(context);
@@ -167,7 +177,9 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 			mSweepAngle = mSweepAngle < mStartAngle ? mSweepAngle + 360
 					: mSweepAngle;
 
-			mDialControl.setText(String.valueOf(mSweepAngle));
+			mDialControl.setGravity(Gravity.CENTER);
+			mDialControl.setText(String.valueOf(mRangeFactor
+					* (mSweepAngle - mStartAngle)));
 
 			// Position our dial control button
 			positionDialControl((int) x, (int) y);
@@ -183,15 +195,15 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 		Log.v("parent size changed", "parent size changed");
 		initDialView();
 		initDialControl();
-		testView.setBackgroundResource(R.drawable.inner_view_circle_mask);
-		testView.layout(mDialLayout.left + DIAL_OFFSET + 100, mDialLayout.top
-				+ DIAL_OFFSET + 235, mDialLayout.right - DIAL_OFFSET - 100,
-				mDialLayout.bottom - DIAL_OFFSET - 235);
-
-		Log.v("LEFT:", String.valueOf(testView.getLeft()));
-		Log.v("TOP:", String.valueOf(testView.getTop()));
-		Log.v("RIGHT:", String.valueOf(testView.getRight()));
-		Log.v("BOTTOM:", String.valueOf(testView.getBottom()));
+		// testView.setBackgroundResource(R.drawable.inner_view_circle_mask);
+		// testView.layout(mDialLayout.left + DIAL_OFFSET + 100, mDialLayout.top
+		// + DIAL_OFFSET + 235, mDialLayout.right - DIAL_OFFSET - 100,
+		// mDialLayout.bottom - DIAL_OFFSET - 235);
+		//
+		// Log.v("LEFT:", String.valueOf(testView.getLeft()));
+		// Log.v("TOP:", String.valueOf(testView.getTop()));
+		// Log.v("RIGHT:", String.valueOf(testView.getRight()));
+		// Log.v("BOTTOM:", String.valueOf(testView.getBottom()));
 
 	}
 
@@ -199,13 +211,16 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 
 		private int mViewWidth;
 		private int mViewHeight;
+
 		private RectF mBigOval;
 		private RectF mSmallOval;
 		private RectF mInnerCircleStroke;
+		private Point mTextPosition;
 
 		private Paint mOuterStrokePaint;
 		private Paint mInnerStrokePaint;
 		private Paint mFillPaint;
+		private Paint mTextPaint;
 
 		private static final float INNER_CIRCLE_DIFF = 100;
 		private static final float OUTER_CIRCLE_OFFSET = BUTTON_OFFSET;
@@ -247,21 +262,32 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 			color = res.getColor(R.color.custom_gray);
 			mInnerStrokePaint = getInnerStrokePaint(color);
 
+			mTextPaint = getTextPaint(Color.BLACK);
+
 			mBigOval = new RectF();
 			mSmallOval = new RectF();
 			mInnerCircleStroke = new RectF();
 		}
 
 		private Paint getOuterStrokePaint(int color) {
-			Paint paint = new Paint();
+			Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 			paint.setColor(color);
 			paint.setStrokeWidth(10);
 			paint.setStyle(Paint.Style.STROKE);
 			return paint;
 		}
 
+		private Paint getTextPaint(int color) {
+			Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+			paint.setColor(color);
+			paint.setTextAlign(Paint.Align.CENTER);
+			paint.setTextSize(100.0f);
+
+			return paint;
+		}
+
 		private Paint getInnerStrokePaint(int color) {
-			Paint paint = new Paint();
+			Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 			paint.setColor(color);
 			paint.setStrokeWidth(10);
 			paint.setStyle(Paint.Style.STROKE);
@@ -269,7 +295,7 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 		}
 
 		private Paint getFillPaint(int color) {
-			Paint paint = new Paint();
+			Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 			paint.setColor(color);
 			paint.setStrokeWidth(10);
 			paint.setStyle(Paint.Style.FILL);
@@ -292,11 +318,18 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 			Log.v("Width D", String.valueOf(mViewWidth));
 			Log.v("Height D", String.valueOf(mViewHeight));
 
+			// The majority of the work here is to ensure that we have square
+			// bounds setup, by doing this we can make a perfect circle and not
+			// an oval.
+
+			// Get the max and min.
 			int max = Math.max(mViewWidth, mViewHeight);
 			int min = Math.min(mViewWidth, mViewHeight);
 
+			// Get orientation.
 			int rotation = getDisplay().getRotation();
 
+			// Set proper bounds depending on orientation.
 			if (rotation == 0) {
 				top = (max - min) / 2;
 				bottom = max - top;
@@ -304,6 +337,9 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 				left = (max - min) / 2;
 				right = max - left;
 			}
+
+			// Setup our RectF's that we will use for drawing the dial later.
+
 			mBigOval.set(left + OUTER_CIRCLE_OFFSET, top + OUTER_CIRCLE_OFFSET,
 					right - OUTER_CIRCLE_OFFSET, bottom - OUTER_CIRCLE_OFFSET);
 
@@ -317,6 +353,21 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 					+ OUTER_CIRCLE_OFFSET, right - INNER_CIRCLE_DIFF
 					- OUTER_CIRCLE_OFFSET, bottom - INNER_CIRCLE_DIFF
 					- OUTER_CIRCLE_OFFSET);
+
+			// Setup text position for default numbers in the middle of the
+			// dial.
+
+			// Make sure text is vertically aligned by getting the size of the
+			// text and creating an offset.
+			Rect bounds = new Rect();
+			mTextPaint.getTextBounds("00", 0, 1, bounds);
+			int offset = bounds.height() / 2;
+
+			mTextPosition = new Point(
+					(int) ((left + INNER_CIRCLE_DIFF + OUTER_CIRCLE_OFFSET) + (mInnerCircleStroke
+							.width() / 2)),
+					(int) ((top + INNER_CIRCLE_DIFF + OUTER_CIRCLE_OFFSET) + (mInnerCircleStroke
+							.height() / 2)) + offset);
 		}
 
 		@Override
@@ -342,6 +393,10 @@ public class InteractiveDialView extends ViewGroup implements OnTouchListener {
 			drawArcs(canvas, mBigOval, true, mFillPaint, true);
 			drawArcs(canvas, mSmallOval, true, getFillPaint(Color.WHITE), false);
 			drawArcs(canvas, mInnerCircleStroke, true, mInnerStrokePaint, false);
+
+			canvas.drawText(
+					String.valueOf((int) (mRangeFactor * (mSweepAngle - mStartAngle))),
+					mTextPosition.x, mTextPosition.y, mTextPaint);
 
 			invalidate();
 		}
